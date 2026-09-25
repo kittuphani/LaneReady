@@ -2,10 +2,13 @@ using LaneReady.Application;
 using LaneReady.Infrastructure;
 using LaneReady.RulesEngine;
 using LaneReady.Web.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Identity.Web;
 using MudBlazor.Services;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,9 +27,22 @@ builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddRulesEngine();
 
-// Entra External ID authentication
-builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+// Authentication — dev uses auto-signed-in cookie; production uses Entra External ID
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        });
+}
+else
+{
+    builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+        .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+}
 
 // Claims transformation: links Entra identity to LaneReady User/Organisation
 builder.Services.AddTransient<Microsoft.AspNetCore.Authentication.IClaimsTransformation,
@@ -133,6 +149,29 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 app.UseStaticFiles();
 app.UseRouting();
+
+// In Development: auto-sign-in a dev user so the app works without Entra External ID
+if (app.Environment.IsDevelopment())
+{
+    app.Use(async (context, next) =>
+    {
+        if (context.User.Identity?.IsAuthenticated != true)
+        {
+            var claims = new List<Claim>
+            {
+                new(ClaimTypes.NameIdentifier, "dev-sub-00000000-0000-0000-0000-000000000001"),
+                new(ClaimTypes.Email, "dev@laneready.local"),
+                new(ClaimTypes.Name, "Dev User"),
+            };
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+            context.User = principal;
+        }
+        await next();
+    });
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();

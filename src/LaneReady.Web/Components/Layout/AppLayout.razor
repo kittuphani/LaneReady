@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
+@inject LaneReady.Application.Common.Interfaces.ICurrentUserService CurrentUser
 
 <MudThemeProvider />
 <MudDialogProvider />
@@ -38,6 +39,16 @@
 
 @code {
     private bool _drawerOpen = true;
+
+    protected override void OnInitialized()
+    {
+        var uri = Nav.ToBaseRelativePath(Nav.Uri);
+        if (CurrentUser.IsAuthenticated && !CurrentUser.HasOrganisation
+            && !uri.StartsWith("onboarding", StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo("/onboarding", replace: true);
+        }
+    }
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 }

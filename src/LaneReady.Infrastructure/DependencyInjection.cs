@@ -40,33 +40,41 @@ public static class DependencyInjection
         services.AddScoped<IApplicationDbContext>(sp =>
             sp.GetRequiredService<ApplicationDbContext>());
 
-        // Azure clients using DefaultAzureCredential — no secrets in code
-        var credential = new DefaultAzureCredential();
-
-        var storageUri = new Uri(configuration["Azure:StorageAccountUri"]
-            ?? throw new InvalidOperationException("Azure:StorageAccountUri is not configured"));
-        services.AddSingleton(new BlobServiceClient(storageUri, credential));
-
-        var queueUri = new Uri(configuration["Azure:QueueServiceUri"]
-            ?? throw new InvalidOperationException("Azure:QueueServiceUri is not configured"));
-        services.AddSingleton(new QueueServiceClient(queueUri, credential));
-
-        var openAiEndpoint = new Uri(configuration["Azure:OpenAI:Endpoint"]
-            ?? throw new InvalidOperationException("Azure:OpenAI:Endpoint is not configured"));
-        services.AddSingleton(new AzureOpenAIClient(openAiEndpoint, credential));
-
-        var acsEndpoint = configuration["Azure:CommunicationServices:Endpoint"]
-            ?? throw new InvalidOperationException("Azure:CommunicationServices:Endpoint is not configured");
-        services.AddSingleton(new EmailClient(new Uri(acsEndpoint), credential));
-
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IDateTimeService, DateTimeService>();
-        services.AddScoped<IBlobStorageService, BlobStorageService>();
-        services.AddScoped<IAiService, AzureOpenAiService>();
-        services.AddScoped<IEmailService, AzureCommunicationEmailService>();
-        services.AddScoped<IStripeService, StripeService>();
-        services.AddScoped<IQueueService, QueueService>();
         services.AddScoped<IRulesEngineService, RulesEngineService>();
+
+        var azureConfigured = !string.IsNullOrEmpty(configuration["Azure:StorageAccountUri"]);
+
+        if (azureConfigured)
+        {
+            // Production: Azure clients using DefaultAzureCredential — no secrets in code
+            var credential = new DefaultAzureCredential();
+
+            services.AddSingleton(new BlobServiceClient(
+                new Uri(configuration["Azure:StorageAccountUri"]!), credential));
+            services.AddSingleton(new QueueServiceClient(
+                new Uri(configuration["Azure:QueueServiceUri"]!), credential));
+            services.AddSingleton(new AzureOpenAIClient(
+                new Uri(configuration["Azure:OpenAI:Endpoint"]!), credential));
+            services.AddSingleton(new EmailClient(
+                new Uri(configuration["Azure:CommunicationServices:Endpoint"]!), credential));
+
+            services.AddScoped<IBlobStorageService, BlobStorageService>();
+            services.AddScoped<IAiService, AzureOpenAiService>();
+            services.AddScoped<IEmailService, AzureCommunicationEmailService>();
+            services.AddScoped<IQueueService, QueueService>();
+            services.AddScoped<IStripeService, StripeService>();
+        }
+        else
+        {
+            // Local development: stub implementations (no Azure required)
+            services.AddScoped<IBlobStorageService, StubBlobStorageService>();
+            services.AddScoped<IAiService, StubAiService>();
+            services.AddScoped<IEmailService, StubEmailService>();
+            services.AddScoped<IQueueService, StubQueueService>();
+            services.AddScoped<IStripeService, StubStripeService>();
+        }
 
         return services;
     }
