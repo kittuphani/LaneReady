@@ -31,7 +31,7 @@
 
     <!-- PDF + CSV -->
     <PackageVersion Include="QuestPDF"                                             Version="2025.1.0" />
-    <PackageVersion Include="CsvHelper"                                            Version="33.0.1" />
+    <PackageVersion Include="CsvHelper"                                            Version="33.1.0" />
 
     <!-- Payments -->
     <PackageVersion Include="Stripe.net"                                           Version="47.3.0" />
