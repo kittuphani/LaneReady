@@ -20,7 +20,7 @@
     <PackageVersion Include="Azure.Security.KeyVault.Secrets"                      Version="4.7.0" />
     <PackageVersion Include="Azure.AI.OpenAI"                                      Version="2.1.0" />
     <PackageVersion Include="Azure.Communication.Email"                            Version="1.0.1" />
-    <PackageVersion Include="Azure.Storage.Queues"                                 Version="12.22.0" />
+    <PackageVersion Include="Azure.Storage.Queues"                                 Version="12.27.1" />
 
     <!-- Auth -->
     <PackageVersion Include="Microsoft.Identity.Web"                               Version="3.8.4" />
