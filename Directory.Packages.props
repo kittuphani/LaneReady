@@ -17,7 +17,7 @@
     <!-- Azure -->
     <PackageVersion Include="Azure.Storage.Blobs"                                  Version="12.23.0" />
     <PackageVersion Include="Azure.Identity"                                       Version="1.13.2" />
-    <PackageVersion Include="Azure.Security.KeyVault.Secrets"                      Version="4.7.0" />
+    <PackageVersion Include="Azure.Security.KeyVault.Secrets"                      Version="4.11.1" />
     <PackageVersion Include="Azure.AI.OpenAI"                                      Version="2.1.0" />
     <PackageVersion Include="Azure.Communication.Email"                            Version="1.0.1" />
     <PackageVersion Include="Azure.Storage.Queues"                                 Version="12.22.0" />
