@@ -1,0 +1,168 @@
+@page "/app/shipments/{Id:guid}"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Shipments.Commands
+@using LaneReady.Application.Features.Shipments.Queries
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Shipment — LaneReady</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_shipment is null)
+{
+    <MudText>Shipment not found.</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/app/shipments"))" />
+        <MudText Typo="Typo.h4">Shipment @_shipment.Id.ToString()[..8]</MudText>
+        <MudSpacer />
+        <MudChip T="string" Color="@LaneColor(_shipment.LaneDecision)" Size="Size.Medium">
+            @_shipment.LaneDecision
+        </MudChip>
+        <MudChip T="string" Color="@StatusColor(_shipment.Status)" Size="Size.Medium">
+            @_shipment.Status
+        </MudChip>
+    </MudStack>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="1">
+                <MudCardContent>
+                    <MudText Typo="Typo.h6" GutterBottom="true">Details</MudText>
+                    <MudText><strong>Date:</strong> @_shipment.ShipmentDate.ToString("dd MMM yyyy")</MudText>
+                    <MudText><strong>Consignee:</strong> @_shipment.ConsigneeType</MudText>
+                    @if (_shipment.CarrierName is not null)
+                    {
+                        <MudText><strong>Carrier:</strong> @_shipment.CarrierName</MudText>
+                    }
+                    @if (_shipment.SourceOrderId is not null)
+                    {
+                        <MudText><strong>Order ID:</strong> @_shipment.SourceOrderId</MudText>
+                    }
+                    <MudText><strong>Rules Version:</strong> @_shipment.RuleSetVersion</MudText>
+                    @if (_shipment.ApprovalOverrideReason is not null)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                            Override: @_shipment.ApprovalOverrideReason
+                        </MudAlert>
+                    }
+                </MudCardContent>
+                @if (_shipment.Status == ShipmentStatus.Draft)
+                {
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                   OnClick="ApproveAsync" Disabled="_submitting">
+                            Approve
+                        </MudButton>
+                    </MudCardActions>
+                }
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudCard Elevation="1" Class="mb-4">
+                <MudCardContent>
+                    <MudText Typo="Typo.h6" GutterBottom="true">Lines (@_shipment.Lines.Count)</MudText>
+                    <MudTable Items="_shipment.Lines" Dense="true" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>SKU</MudTh>
+                            <MudTh>Description</MudTh>
+                            <MudTh>Commodity</MudTh>
+                            <MudTh>Qty</MudTh>
+                            <MudTh>Value</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.ProductSku</MudTd>
+                            <MudTd>@context.ProductDescription</MudTd>
+                            <MudTd>@(context.CommodityCode ?? "—")</MudTd>
+                            <MudTd>@context.Quantity</MudTd>
+                            <MudTd>@context.LineValueCurrency @context.LineValueAmount.ToString("N2")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+
+            <MudCard Elevation="1">
+                <MudCardContent>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                        <MudText Typo="Typo.h6">Evidence (@_shipment.Evidence.Count)</MudText>
+                        <MudSpacer />
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                                   Href="@($"/app/shipments/{Id}/upload-evidence")">
+                            Upload
+                        </MudButton>
+                    </MudStack>
+                    @if (_shipment.Evidence.Count == 0)
+                    {
+                        <MudText Color="Color.Secondary">No evidence uploaded yet.</MudText>
+                    }
+                    @foreach (var doc in _shipment.Evidence)
+                    {
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-1">
+                            <MudIcon Icon="@Icons.Material.Filled.InsertDriveFile" Size="Size.Small" />
+                            <MudText Typo="Typo.body2">@doc.FileName</MudText>
+                            <MudChip T="string" Size="Size.Small">@doc.DocumentType</MudChip>
+                            <MudSpacer />
+                            <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small"
+                                           Href="@($"/api/evidence/{doc.Id}/download")" />
+                        </MudStack>
+                    }
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private bool _loading = true;
+    private bool _submitting;
+    private ShipmentDetailDto? _shipment;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _shipment = await Mediator.Send(new GetShipmentQuery(Id));
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ApproveAsync()
+    {
+        _submitting = true;
+        try
+        {
+            await Mediator.Send(new ApproveShipmentCommand(Id));
+            Snackbar.Add("Shipment approved", Severity.Success);
+            _shipment = await Mediator.Send(new GetShipmentQuery(Id));
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _submitting = false; }
+    }
+
+    private static Color LaneColor(LaneDecision d) => d switch
+    {
+        LaneDecision.Green => Color.Success,
+        LaneDecision.Orange => Color.Warning,
+        LaneDecision.Red => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color StatusColor(ShipmentStatus s) => s switch
+    {
+        ShipmentStatus.Approved => Color.Success,
+        ShipmentStatus.Exported => Color.Info,
+        ShipmentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -1,0 +1,100 @@
+@page "/app/ukims"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Ukims.Commands
+@using LaneReady.Application.Features.Organisations.Queries
+@using static LaneReady.Application.Features.Organisations.Queries.GetOrganisationQuery
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>UKIMS — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">UKIMS Authorisation</MudText>
+
+@if (_org?.HasValidUkims == true)
+{
+    <MudAlert Severity="Severity.Success" Class="mb-4"
+              Icon="@Icons.Material.Filled.VerifiedUser">
+        <MudText Typo="Typo.h6">UKIMS Active</MudText>
+        <MudText>Number: <strong>@_org.UkimsNumber</strong> — Expires: <strong>@_org.UkimsExpiry?.ToString("dd MMM yyyy")</strong></MudText>
+    </MudAlert>
+}
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Record UKIMS Authorisation</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Color="Color.Secondary" Class="mb-4">
+                    Once HMRC has issued your UKIMS number, enter it below to unlock B2B green-lane shipments.
+                </MudText>
+                <MudTextField @bind-Value="_ukimsNumber" Label="UKIMS Number"
+                              Required="true" RequiredError="Required"
+                              HelperText="Format: UKIMSxxxxxxxx" MaxLength="50" />
+                <MudDatePicker @bind-Date="_expiryDate" Label="Expiry Date"
+                               Required="true" Class="mt-4"
+                               MinDate="DateTime.Today.AddDays(1)" />
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="SubmitAsync" Disabled="_submitting || string.IsNullOrEmpty(_ukimsNumber)">
+                    @(_submitting ? "Saving..." : "Save UKIMS")
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="1">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" GutterBottom="true">
+                    <MudIcon Icon="@Icons.Material.Filled.Info" Class="mr-1" />
+                    What is UKIMS?
+                </MudText>
+                <MudText>The UK Internal Market Scheme (UKIMS) is HMRC's authorisation for GB businesses
+                    to move goods to Northern Ireland on the Windsor Framework green lane.</MudText>
+                <MudText Class="mt-2">
+                    <MudLink Href="https://www.gov.uk/guidance/apply-for-ukims" Target="_blank">
+                        Apply on GOV.UK →
+                    </MudLink>
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _submitting;
+    private string? _ukimsNumber;
+    private DateTime? _expiryDate;
+    private OrganisationDto? _org;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _org = await Mediator.Send(new GetOrganisationQuery());
+    }
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        try
+        {
+            var cmd = new RecordUkimsCommand(
+                _ukimsNumber!,
+                DateOnly.FromDateTime(_expiryDate!.Value));
+            await Mediator.Send(cmd);
+            Snackbar.Add("UKIMS authorisation recorded", Severity.Success);
+            Nav.NavigateTo("/app/dashboard");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally { _submitting = false; }
+    }
+}

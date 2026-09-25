@@ -1,0 +1,50 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.userprefs
+packages/
+*.nupkg
+*.snupkg
+.nuget/
+
+## Build output
+publish/
+artifacts/
+
+## Secrets — never commit
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+local.settings.json
+*.pfx
+*.p12
+secrets.json
+
+## Rider
+.idea/
+
+## VS Code
+.vscode/
+
+## macOS
+.DS_Store
+
+## Azure Functions local config
+local.settings.json
+
+## Entity Framework migrations model snapshot cache
+*.mdf
+*.ldf
+
+## Test results
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+## NuGet
+*.lock.json
+!packages.lock.json

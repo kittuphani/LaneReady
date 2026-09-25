@@ -1,0 +1,83 @@
+@page "/app/settings/billing"
+@attribute [Authorize(Policy = "RequireOwner")]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Billing.Commands
+@using LaneReady.Application.Features.Organisations.Queries
+@using static LaneReady.Application.Features.Organisations.Queries.GetOrganisationQuery
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Billing — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Billing & Plan</MudText>
+
+@if (_org is not null)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4">
+        Current plan: <strong>@_org.Plan</strong>
+        @if (_org.IsTrialActive)
+        {
+            <span> — Trial active until @_org.TrialEndsAt?.ToString("dd MMM yyyy")</span>
+        }
+    </MudAlert>
+}
+
+<MudGrid>
+    @foreach (var (plan, price, desc) in Plans)
+    {
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2" Class="@(_org?.Plan.ToString() == plan ? "mud-border-primary" : "")">
+                <MudCardContent>
+                    <MudText Typo="Typo.h5">@plan</MudText>
+                    <MudText Typo="Typo.h4" Color="Color.Primary">@price</MudText>
+                    <MudText Color="Color.Secondary" Class="mt-2">@desc</MudText>
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                               Disabled="_submitting" OnClick="@(() => UpgradeAsync(plan))">
+                        @(_org?.Plan.ToString() == plan ? "Current Plan" : "Upgrade")
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private bool _submitting;
+    private OrganisationDto? _org;
+
+    private static readonly List<(string Plan, string Price, string Desc)> Plans =
+    [
+        ("Starter", "£49/mo", "Up to 500 products, 50 shipments/month"),
+        ("Growth", "£149/mo", "Up to 5,000 products, unlimited shipments"),
+        ("Enterprise", "Custom", "Unlimited, dedicated support, SLA")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _org = await Mediator.Send(new GetOrganisationQuery());
+    }
+
+    private async Task UpgradeAsync(string planName)
+    {
+        if (!Enum.TryParse<PlanTier>(planName, out var plan)) return;
+        _submitting = true;
+        try
+        {
+            var baseUrl = Nav.BaseUri.TrimEnd('/');
+            var url = await Mediator.Send(new CreateCheckoutSessionCommand(
+                plan,
+                $"{baseUrl}/app/settings/billing?success=true",
+                $"{baseUrl}/app/settings/billing"));
+            Nav.NavigateTo(url, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally { _submitting = false; }
+    }
+}

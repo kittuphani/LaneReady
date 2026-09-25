@@ -1,0 +1,60 @@
+name: CD — Production
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore LaneReady.sln
+
+      - name: Publish Web
+        run: |
+          dotnet publish src/LaneReady.Web/LaneReady.Web.csproj \
+            --configuration Release \
+            --output ./publish/web
+
+      - name: Publish Functions
+        run: |
+          dotnet publish src/LaneReady.Functions/LaneReady.Functions.csproj \
+            --configuration Release \
+            --output ./publish/functions
+
+      - name: Deploy Web to staging slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEB_APP_NAME_PROD }}
+          slot-name: staging
+          publish-profile: ${{ secrets.AZURE_WEB_PUBLISH_PROFILE_PROD_STAGING }}
+          package: ./publish/web
+
+      - name: Deploy Functions
+        uses: azure/functions-action@v1
+        with:
+          app-name: ${{ vars.AZURE_FUNCTIONS_APP_NAME_PROD }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONS_PUBLISH_PROFILE_PROD }}
+          package: ./publish/functions
+
+      - name: Swap staging → production slot (zero downtime)
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az webapp deployment slot swap \
+              --name ${{ vars.AZURE_WEB_APP_NAME_PROD }} \
+              --resource-group ${{ vars.AZURE_RESOURCE_GROUP_PROD }} \
+              --slot staging \
+              --target-slot production

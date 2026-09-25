@@ -1,0 +1,49 @@
+name: CD — Dev
+
+on:
+  push:
+    branches: [ develop ]
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore LaneReady.sln
+
+      - name: Publish Web
+        run: |
+          dotnet publish src/LaneReady.Web/LaneReady.Web.csproj \
+            --configuration Release \
+            --output ./publish/web
+
+      - name: Publish Functions
+        run: |
+          dotnet publish src/LaneReady.Functions/LaneReady.Functions.csproj \
+            --configuration Release \
+            --output ./publish/functions
+
+      - name: Deploy Web to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEB_APP_NAME_DEV }}
+          publish-profile: ${{ secrets.AZURE_WEB_PUBLISH_PROFILE_DEV }}
+          package: ./publish/web
+
+      - name: Deploy Functions to Azure
+        uses: azure/functions-action@v1
+        with:
+          app-name: ${{ vars.AZURE_FUNCTIONS_APP_NAME_DEV }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONS_PUBLISH_PROFILE_DEV }}
+          package: ./publish/functions

@@ -1,0 +1,53 @@
+@page "/app/settings/team"
+@attribute [Authorize(Policy = "RequireOwner")]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Users.Commands
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+
+<PageTitle>Team — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Team Members</MudText>
+
+<MudCard Elevation="2" Class="mb-4" Style="max-width:480px">
+    <MudCardHeader>
+        <CardHeaderContent><MudText Typo="Typo.h6">Invite Someone</MudText></CardHeaderContent>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudTextField @bind-Value="_email" Label="Email Address" InputType="InputType.Email"
+                      Required="true" MaxLength="320" />
+        <MudSelect T="UserRole" @bind-Value="_role" Label="Role" Class="mt-4">
+            <MudSelectItem Value="UserRole.Operations">Operations</MudSelectItem>
+            <MudSelectItem Value="UserRole.ReadOnly">Read Only</MudSelectItem>
+        </MudSelect>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="InviteAsync" Disabled="_submitting || string.IsNullOrEmpty(_email)">
+            @(_submitting ? "Sending..." : "Send Invite")
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    private bool _submitting;
+    private string? _email;
+    private UserRole _role = UserRole.Operations;
+
+    private async Task InviteAsync()
+    {
+        _submitting = true;
+        try
+        {
+            await Mediator.Send(new InviteUserCommand(_email!, _role));
+            Snackbar.Add($"Invite sent to {_email}", Severity.Success);
+            _email = null;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally { _submitting = false; }
+    }
+}

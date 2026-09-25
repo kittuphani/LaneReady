@@ -1,0 +1,159 @@
+@page "/app/products/{Id:guid}"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Products.Commands
+@using LaneReady.Application.Common.Interfaces
+@using LaneReady.Domain.Enums
+@using Microsoft.EntityFrameworkCore
+@inject IMediator Mediator
+@inject IApplicationDbContext Db
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Product — LaneReady</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_product is null)
+{
+    <MudText>Product not found.</MudText>
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/app/products"))" />
+        <MudText Typo="Typo.h4">@_product.Title</MudText>
+        <MudChip T="string" Color="@ProductStatusColor(_product.Status)" Size="Size.Small">
+            @_product.Status
+        </MudChip>
+    </MudStack>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.h6" GutterBottom="true">Product Details</MudText>
+                    <MudTextField Value="_product.Sku" Label="SKU" ReadOnly="true" Variant="Variant.Outlined" />
+                    <MudTextField @bind-Value="_description" Label="Description" Lines="3" Class="mt-3"
+                                  Variant="Variant.Outlined" MaxLength="500" />
+                    <MudTextField @bind-Value="_countryOfOrigin" Label="Country of Origin (ISO 2)" Class="mt-3"
+                                  Variant="Variant.Outlined" MaxLength="2" />
+                    <MudTextField @bind-Value="_commodityCode" Label="Commodity Code (8 or 10 digits)" Class="mt-3"
+                                  Variant="Variant.Outlined" MaxLength="10" />
+                    <MudNumericField @bind-Value="_grossWeightKg" Label="Gross Weight (kg)" Class="mt-3"
+                                     Variant="Variant.Outlined" Min="0.001m" />
+                    <MudNumericField @bind-Value="_netWeightKg" Label="Net Weight (kg)" Class="mt-3"
+                                     Variant="Variant.Outlined" Min="0.001m" />
+                    <MudNumericField @bind-Value="_unitValue" Label="Unit Value (GBP)" Class="mt-3"
+                                     Variant="Variant.Outlined" Min="0.01m" />
+                </MudCardContent>
+                <MudCardActions>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving">
+                        @(_saving ? "Saving..." : "Save")
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        @if (_product.AiSuggestion is not null)
+        {
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2" Style="border: 1px solid var(--mud-palette-warning)">
+                    <MudCardContent>
+                        <MudText Typo="Typo.h6" GutterBottom="true">
+                            <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Class="mr-1" Color="Color.Warning" />
+                            AI Suggestion
+                        </MudText>
+                        <MudText>Code: <strong>@(_product.AiSuggestion.SuggestedCommodityCode?.Value ?? "—")</strong></MudText>
+                        <MudText>Confidence: <strong>@($"{_product.AiSuggestion.ConfidenceScore * 100:F0}")%</strong></MudText>
+                        <MudText Color="Color.Secondary" Class="mt-1">@_product.AiSuggestion.Reasoning</MudText>
+                        <MudText Typo="Typo.caption">Model: @_product.AiSuggestion.ModelVersion</MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning"
+                                   OnClick="ConfirmAiAsync" Disabled="_saving">
+                            Accept Suggestion
+                        </MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private bool _loading = true;
+    private bool _saving;
+    private LaneReady.Domain.Entities.Product? _product;
+    private string? _description;
+    private string? _countryOfOrigin;
+    private string? _commodityCode;
+    private decimal _grossWeightKg;
+    private decimal _netWeightKg;
+    private decimal _unitValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _product = await Db.Products
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == Id);
+
+            if (_product is not null)
+            {
+                _description = _product.Description;
+                _countryOfOrigin = _product.CountryOfOrigin;
+                _commodityCode = _product.ConfirmedCommodityCode?.Value;
+                _grossWeightKg = _product.GrossWeightKg;
+                _netWeightKg = _product.NetWeightKg;
+                _unitValue = _product.UnitValue.Amount;
+            }
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            await Mediator.Send(new UpsertProductCommand(
+                _product!.Sku,
+                _product.Title,
+                _description ?? _product.Description,
+                _grossWeightKg,
+                _netWeightKg,
+                _unitValue,
+                _countryOfOrigin ?? _product.CountryOfOrigin,
+                _commodityCode));
+            Snackbar.Add("Product saved", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task ConfirmAiAsync()
+    {
+        _saving = true;
+        try
+        {
+            await Mediator.Send(new ConfirmAiSuggestionCommand(Id));
+            Snackbar.Add("AI suggestion accepted", Severity.Success);
+            Nav.NavigateTo("/app/products");
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private static Color ProductStatusColor(ProductStatus s) => s switch
+    {
+        ProductStatus.Complete => Color.Success,
+        ProductStatus.NeedsReview => Color.Warning,
+        _ => Color.Error
+    };
+}

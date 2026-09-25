@@ -1,0 +1,123 @@
+@page "/check"
+@layout PublicLayout
+@attribute [AllowAnonymous]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using LaneReady.Application.Common.Interfaces
+@using LaneReady.RulesEngine.Evaluation
+@using LaneReady.RulesEngine.Models
+@inject IRulesEngineService RulesEngine
+
+<PageTitle>Eligibility Check — LaneReady</PageTitle>
+
+<MudGrid Justify="Justify.Center">
+    <MudItem xs="12" md="7">
+        <MudText Typo="Typo.h4" GutterBottom="true">Windsor Framework Eligibility Check</MudText>
+        <MudText Color="Color.Secondary" Class="mb-6">
+            Answer a few questions to find out if your business can use the green lane.
+        </MudText>
+
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_result is not null)
+        {
+            <MudAlert Severity="@(_result.Eligible ? Severity.Success : Severity.Warning)"
+                      Class="mb-4" Icon="@(_result.Eligible ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Info)">
+                <MudText Typo="Typo.h6">@(_result.Eligible ? "You appear to be eligible" : "You may not be eligible")</MudText>
+                <MudText>@_result.Message</MudText>
+            </MudAlert>
+            @if (_result.Eligible)
+            {
+                <MudButton Href="/Identity/Account/Login" Variant="Variant.Filled" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.ArrowForward" Class="mt-4">
+                    Get started with LaneReady
+                </MudButton>
+            }
+        }
+        else if (_currentQuestion is not null)
+        {
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudText Typo="Typo.h6" GutterBottom="true">
+                        @_currentQuestion.Text
+                    </MudText>
+
+                    @if (_currentQuestion.Type == "boolean")
+                    {
+                        <MudStack Row="true" Spacing="3" Class="mt-4">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       OnClick="@(() => AnswerAsync("true"))">Yes</MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                       OnClick="@(() => AnswerAsync("false"))">No</MudButton>
+                        </MudStack>
+                    }
+                    else if (_currentQuestion.Options?.Count > 0)
+                    {
+                        <MudStack Spacing="2" Class="mt-4">
+                            @foreach (var opt in _currentQuestion.Options)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                                           OnClick="@(() => AnswerAsync(opt))">
+                                    @opt
+                                </MudButton>
+                            }
+                        </MudStack>
+                    }
+                </MudCardContent>
+            </MudCard>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Error">
+                The eligibility check is temporarily unavailable. Please try again shortly.
+            </MudAlert>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _loading = true;
+    private EligibilityQuestion? _currentQuestion;
+    private EligibilityResult? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _currentQuestion = await RulesEngine.GetFirstEligibilityQuestionAsync();
+        }
+        catch
+        {
+            _currentQuestion = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AnswerAsync(string answer)
+    {
+        if (_currentQuestion is null) return;
+        _loading = true;
+
+        try
+        {
+            var step = await RulesEngine.AnswerEligibilityQuestionAsync(_currentQuestion.Id, answer);
+            if (step.IsComplete)
+            {
+                _result = step.Result;
+                _currentQuestion = null;
+            }
+            else
+            {
+                _currentQuestion = step.NextQuestion;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

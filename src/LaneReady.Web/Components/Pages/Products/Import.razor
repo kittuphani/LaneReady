@@ -1,0 +1,106 @@
+@page "/app/products/import"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Common.Interfaces
+@using LaneReady.Application.Features.Products.Commands
+@using Azure.Storage.Queues
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IBlobStorageService BlobStorage
+
+<PageTitle>Import Products — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Import Products</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" GutterBottom="true">CSV Upload</MudText>
+                <MudText Color="Color.Secondary" Class="mb-3">
+                    Upload a CSV with columns: <code>sku, title, description, country_of_origin, commodity_code</code>.
+                    Max 5,000 rows per file.
+                </MudText>
+
+                <InputFile id="csvInput" OnChange="FileSelected" accept=".csv" style="display:none" />
+                <MudButton Variant="Variant.Outlined" HtmlTag="label" for="csvInput"
+                           StartIcon="@Icons.Material.Filled.UploadFile">
+                    Choose CSV File
+                </MudButton>
+
+                @if (_fileName is not null)
+                {
+                    <MudChip T="string" Class="ml-2" OnClose="ClearFile">@_fileName</MudChip>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="UploadAsync" Disabled="_uploading || _selectedFile is null">
+                    @(_uploading ? "Uploading..." : "Start Import")
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="1">
+            <MudCardContent>
+                <MudText Typo="Typo.h6" GutterBottom="true">CSV Template</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Download the template to ensure your file is formatted correctly.
+                </MudText>
+                <a href="/templates/product-import-template.csv"
+                   download="product-import-template.csv"
+                   class="mud-button-root mud-button mud-button-outlined mud-button-outlined-default mud-ripple mt-3">
+                    Download Template
+                </a>
+
+                <MudDivider Class="my-3" />
+                <MudText Typo="Typo.h6" GutterBottom="true">Processing</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Imports run in the background. You'll receive an email when complete.
+                    Products with missing commodity codes are flagged for AI assistance.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _uploading;
+    private IBrowserFile? _selectedFile;
+    private string? _fileName;
+
+    private void FileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _fileName = e.File.Name;
+    }
+
+    private void ClearFile()
+    {
+        _selectedFile = null;
+        _fileName = null;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null) return;
+        _uploading = true;
+        try
+        {
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var result = await BlobStorage.UploadImportFileAsync(stream, _selectedFile.Name, CancellationToken.None);
+
+            await Mediator.Send(new EnqueueProductImportCommand(result.BlobPath));
+            Snackbar.Add("Import queued — you'll receive an email when it completes.", Severity.Success);
+            Nav.NavigateTo("/app/products");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Upload failed: {ex.Message}", Severity.Error);
+        }
+        finally { _uploading = false; }
+    }
+}

@@ -1,0 +1,33 @@
+@inject NavigationManager Nav
+
+<MudNavMenu>
+    <MudNavLink Href="/app/dashboard" Icon="@Icons.Material.Filled.Dashboard">
+        Dashboard
+    </MudNavLink>
+    <MudNavGroup Title="Products" Icon="@Icons.Material.Filled.Inventory2" Expanded="true">
+        <MudNavLink Href="/app/products">Product Library</MudNavLink>
+        <MudNavLink Href="/app/products/import">Import Products</MudNavLink>
+    </MudNavGroup>
+    <MudNavGroup Title="Shipments" Icon="@Icons.Material.Filled.LocalShipping" Expanded="true">
+        <MudNavLink Href="/app/shipments">All Shipments</MudNavLink>
+        <MudNavLink Href="/app/shipments/create">New Shipment</MudNavLink>
+    </MudNavGroup>
+    <MudNavLink Href="/app/evidence" Icon="@Icons.Material.Filled.FolderOpen">
+        Evidence Vault
+    </MudNavLink>
+    <MudNavLink Href="/app/ukims" Icon="@Icons.Material.Filled.VerifiedUser">
+        UKIMS Application
+    </MudNavLink>
+    <MudDivider Class="my-2" />
+    <MudNavGroup Title="Settings" Icon="@Icons.Material.Filled.Settings">
+        <MudNavLink Href="/app/settings/team">Team Members</MudNavLink>
+        <MudNavLink Href="/app/settings/billing">Billing</MudNavLink>
+        <MudNavLink Href="/app/settings/audit">Audit Log</MudNavLink>
+    </MudNavGroup>
+    <AuthorizeView Policy="RequireAdmin">
+        <MudDivider Class="my-2" />
+        <MudNavGroup Title="Admin" Icon="@Icons.Material.Filled.AdminPanelSettings">
+            <MudNavLink Href="/admin/rulesets">Rule Sets</MudNavLink>
+        </MudNavGroup>
+    </AuthorizeView>
+</MudNavMenu>

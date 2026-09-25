@@ -1,0 +1,131 @@
+@page "/onboarding"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Organisations.Commands
+@inject IMediator Mediator
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Set Up Your Organisation — LaneReady</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudText Typo="Typo.h4" GutterBottom="true" Align="Align.Center">Welcome to LaneReady</MudText>
+    <MudText Color="Color.Secondary" Align="Align.Center" Class="mb-8">
+        Let's set up your organisation so you can start checking Windsor Framework compliance.
+    </MudText>
+
+    <MudStepper @ref="_stepper">
+        <MudStep Title="Organisation Details">
+            <MudForm @ref="_orgForm" @bind-IsValid="_orgFormValid">
+                <MudTextField @bind-Value="_model.OrganisationName" Label="Organisation Name"
+                              Required="true" RequiredError="Organisation name is required"
+                              MaxLength="200" />
+                <MudTextField @bind-Value="_model.GbEoriNumber" Label="GB EORI Number"
+                              Required="true" RequiredError="GB EORI number is required"
+                              HelperText="Format: GB followed by 12 digits (e.g. GB123456789012)"
+                              MaxLength="20" Class="mt-4" />
+                <MudTextField @bind-Value="_model.XiEoriNumber" Label="XI EORI Number (optional)"
+                              HelperText="Format: XI followed by 12 digits"
+                              MaxLength="20" Class="mt-4" />
+                <MudTextField @bind-Value="_model.VatNumber" Label="VAT Registration Number (optional)"
+                              HelperText="9 or 12 digits, with or without GB prefix"
+                              MaxLength="20" Class="mt-4" />
+            </MudForm>
+        </MudStep>
+
+        <MudStep Title="Confirmation">
+            <MudStack Spacing="2">
+                <MudText><strong>Organisation:</strong> @_model.OrganisationName</MudText>
+                <MudText><strong>GB EORI:</strong> @_model.GbEoriNumber</MudText>
+                @if (!string.IsNullOrEmpty(_model.XiEoriNumber))
+                {
+                    <MudText><strong>XI EORI:</strong> @_model.XiEoriNumber</MudText>
+                }
+                @if (!string.IsNullOrEmpty(_model.VatNumber))
+                {
+                    <MudText><strong>VAT:</strong> @_model.VatNumber</MudText>
+                }
+                <MudText Color="Color.Secondary" Class="mt-4">
+                    By creating your organisation you agree to our Terms of Service and Privacy Policy.
+                </MudText>
+            </MudStack>
+        </MudStep>
+    </MudStepper>
+
+    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-6">
+        @if (_currentStep > 0)
+        {
+            <MudButton OnClick="PreviousStep" Variant="Variant.Outlined">Back</MudButton>
+        }
+        else
+        {
+            <span />
+        }
+
+        @if (_currentStep < 1)
+        {
+            <MudButton OnClick="NextStep" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="!_orgFormValid">Next</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="SubmitAsync" Variant="Variant.Filled" Color="Color.Primary"
+                       Disabled="_submitting" StartIcon="@Icons.Material.Filled.Check">
+                @(_submitting ? "Creating..." : "Create Organisation")
+            </MudButton>
+        }
+    </MudStack>
+</MudContainer>
+
+@code {
+    private MudStepper? _stepper;
+    private MudForm? _orgForm;
+    private bool _orgFormValid;
+    private bool _submitting;
+    private int _currentStep;
+
+    private readonly OnboardingModel _model = new();
+
+    private void NextStep()
+    {
+        _orgForm?.Validate();
+        if (_orgFormValid)
+            _currentStep++;
+    }
+
+    private void PreviousStep() => _currentStep--;
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        try
+        {
+            var command = new CreateOrganisationCommand(
+                _model.OrganisationName,
+                _model.GbEoriNumber,
+                _model.XiEoriNumber,
+                _model.VatNumber,
+                UkimsNumber: null);
+
+            await Mediator.Send(command);
+            Nav.NavigateTo("/app/dashboard", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to create organisation: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private sealed class OnboardingModel
+    {
+        public string OrganisationName { get; set; } = string.Empty;
+        public string GbEoriNumber { get; set; } = string.Empty;
+        public string? XiEoriNumber { get; set; }
+        public string? VatNumber { get; set; }
+    }
+}

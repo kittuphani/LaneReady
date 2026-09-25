@@ -1,0 +1,97 @@
+@page "/app/shipments"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Shipments.Queries
+@using LaneReady.Application.Common.Models
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject NavigationManager Nav
+
+<PageTitle>Shipments — LaneReady</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Shipments</MudText>
+    <MudSpacer />
+    <MudButton Href="/app/shipments/create" Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add">New Shipment</MudButton>
+</MudStack>
+
+<MudSelect T="ShipmentStatus?" Value="_statusFilter" Label="Status" Clearable="true"
+           Style="max-width:200px;margin-bottom:16px"
+           ValueChanged="@((ShipmentStatus? v) => { _statusFilter = v; _ = LoadAsync(); })">
+    <MudSelectItem T="ShipmentStatus?" Value="@ShipmentStatus.Draft">Draft</MudSelectItem>
+    <MudSelectItem T="ShipmentStatus?" Value="@ShipmentStatus.Approved">Approved</MudSelectItem>
+    <MudSelectItem T="ShipmentStatus?" Value="@ShipmentStatus.Exported">Exported</MudSelectItem>
+    <MudSelectItem T="ShipmentStatus?" Value="@ShipmentStatus.Cancelled">Cancelled</MudSelectItem>
+</MudSelect>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_result is not null)
+{
+    <MudTable Items="_result.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Date</MudTh>
+            <MudTh>Consignee</MudTh>
+            <MudTh>Lane</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Lines</MudTh>
+            <MudTh>Carrier</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Date">@context.ShipmentDate.ToString("dd MMM yyyy")</MudTd>
+            <MudTd DataLabel="Consignee">@context.ConsigneeType</MudTd>
+            <MudTd DataLabel="Lane">
+                <MudChip T="string" Color="@LaneColor(context.LaneDecision)" Size="Size.Small">
+                    @context.LaneDecision
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">
+                    @context.Status
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Lines">@context.LineCount</MudTd>
+            <MudTd DataLabel="Carrier">@(context.CarrierName ?? "—")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small"
+                               Href="@($"/app/shipments/{context.Id}")" />
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private ShipmentStatus? _statusFilter;
+    private PagedResult<ShipmentSummaryDto>? _result;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _result = await Mediator.Send(new GetShipmentsQuery(_statusFilter)); }
+        finally { _loading = false; }
+    }
+
+    private static Color LaneColor(LaneDecision d) => d switch
+    {
+        LaneDecision.Green => Color.Success,
+        LaneDecision.Orange => Color.Warning,
+        LaneDecision.Red => Color.Error,
+        _ => Color.Default
+    };
+
+    private static Color StatusColor(ShipmentStatus s) => s switch
+    {
+        ShipmentStatus.Approved => Color.Success,
+        ShipmentStatus.Exported => Color.Info,
+        ShipmentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+}

@@ -1,0 +1,137 @@
+@page "/app/products"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Products.Queries
+@using LaneReady.Application.Features.Products.Commands
+@using LaneReady.Application.Common.Models
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Products — LaneReady</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.h4">Products</MudText>
+    <MudSpacer />
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+               OnClick="EnqueueAiAsync" StartIcon="@Icons.Material.Filled.AutoAwesome"
+               Disabled="_aiRunning">
+        @(_aiRunning ? "Running..." : "Run AI Suggestions")
+    </MudButton>
+    <MudButton Href="/app/products/import" Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Upload">
+        Import
+    </MudButton>
+</MudStack>
+
+<MudStack Row="true" Spacing="2" Class="mb-4">
+    <MudTextField @bind-Value="_search" Label="Search" Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true" DebounceInterval="300"
+                  OnDebounceIntervalElapsed="LoadAsync" />
+    <MudSelect T="ProductStatus?" Value="_statusFilter" Label="Status"
+               Clearable="true" Style="min-width:160px"
+               ValueChanged="@((ProductStatus? v) => { _statusFilter = v; _ = LoadAsync(); })">
+        <MudSelectItem T="ProductStatus?" Value="@ProductStatus.NeedsReview">Needs Review</MudSelectItem>
+        <MudSelectItem T="ProductStatus?" Value="@ProductStatus.MissingData">Missing Data</MudSelectItem>
+        <MudSelectItem T="ProductStatus?" Value="@ProductStatus.Complete">Complete</MudSelectItem>
+    </MudSelect>
+</MudStack>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_result is not null)
+{
+    <MudTable Items="_result.Items" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+              FixedHeader="true" Height="calc(100vh - 280px)">
+        <HeaderContent>
+            <MudTh>SKU</MudTh>
+            <MudTh>Title</MudTh>
+            <MudTh>Commodity Code</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>AI</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="SKU"><MudText Typo="Typo.body2">@context.Sku</MudText></MudTd>
+            <MudTd DataLabel="Title">@context.Title</MudTd>
+            <MudTd DataLabel="Code">
+                @if (context.CommodityCode is not null)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small">@context.CommodityCode</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">Missing</MudChip>
+                }
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Color="@StatusColor(context.Status)" Size="Size.Small">@context.Status</MudChip>
+            </MudTd>
+            <MudTd DataLabel="AI">
+                @if (context.HasAiSuggestion && !context.AiConfirmed)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome" Color="Color.Info" Size="Size.Small"
+                                   OnClick="@(() => ConfirmAiAsync(context.Id))" />
+                }
+                else if (context.AiConfirmed)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               Href="@($"/app/products/{context.Id}")" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _aiRunning;
+    private string? _search;
+    private ProductStatus? _statusFilter;
+    private PagedResult<ProductSummaryDto>? _result;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _result = await Mediator.Send(new GetProductsQuery(_statusFilter, _search)); }
+        finally { _loading = false; }
+    }
+
+    private async Task ConfirmAiAsync(Guid productId)
+    {
+        await Mediator.Send(new ConfirmAiSuggestionCommand(productId));
+        Snackbar.Add("AI suggestion confirmed", Severity.Success);
+        await LoadAsync();
+    }
+
+    private async Task EnqueueAiAsync()
+    {
+        _aiRunning = true;
+        try
+        {
+            var count = await Mediator.Send(new EnqueueAiSuggestionsCommand());
+            Snackbar.Add($"Queued {count} products for AI processing", Severity.Info);
+        }
+        finally { _aiRunning = false; }
+    }
+
+    private static Color StatusColor(ProductStatus s) => s switch
+    {
+        ProductStatus.Complete => Color.Success,
+        ProductStatus.NeedsReview => Color.Warning,
+        _ => Color.Error
+    };
+}

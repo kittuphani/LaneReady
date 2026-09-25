@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LaneReady.Application/LaneReady.Application.csproj" />
+    <Project Path="src/LaneReady.Domain/LaneReady.Domain.csproj" />
+    <Project Path="src/LaneReady.Functions/LaneReady.Functions.csproj" />
+    <Project Path="src/LaneReady.Infrastructure/LaneReady.Infrastructure.csproj" />
+    <Project Path="src/LaneReady.RulesEngine/LaneReady.RulesEngine.csproj" />
+    <Project Path="src/LaneReady.Web/LaneReady.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LaneReady.Application.Tests/LaneReady.Application.Tests.csproj" />
+    <Project Path="tests/LaneReady.Domain.Tests/LaneReady.Domain.Tests.csproj" />
+    <Project Path="tests/LaneReady.Integration.Tests/LaneReady.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

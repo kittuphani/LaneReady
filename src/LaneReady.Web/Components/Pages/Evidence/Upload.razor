@@ -1,0 +1,91 @@
+@page "/app/shipments/{ShipmentId:guid}/upload-evidence"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Evidence.Commands
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Upload Evidence — LaneReady</PageTitle>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                   OnClick="@(() => Nav.NavigateTo($"/app/shipments/{ShipmentId}"))" />
+    <MudText Typo="Typo.h4">Upload Evidence</MudText>
+</MudStack>
+
+<MudCard Elevation="2" Style="max-width:540px">
+    <MudCardContent>
+        <MudSelect T="EvidenceDocumentType" @bind-Value="_docType" Label="Document Type" Class="mb-4">
+            @foreach (EvidenceDocumentType t in Enum.GetValues<EvidenceDocumentType>())
+            {
+                <MudSelectItem Value="t">@t</MudSelectItem>
+            }
+        </MudSelect>
+
+        <InputFile id="evidenceInput" OnChange="FileSelected"
+                   accept=".pdf,.jpg,.jpeg,.png,.csv" style="display:none" />
+        <MudButton Variant="Variant.Outlined" HtmlTag="label" for="evidenceInput"
+                   StartIcon="@Icons.Material.Filled.AttachFile">
+            Choose File
+        </MudButton>
+
+        @if (_selectedFile is not null)
+        {
+            <MudChip T="string" Class="ml-2">@_selectedFile.Name (@FormatSize(_selectedFile.Size))</MudChip>
+        }
+
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3">
+            Allowed: PDF, JPEG, PNG, CSV. Max 20 MB. Files are stored with SHA-256 verification.
+        </MudAlert>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   OnClick="UploadAsync" Disabled="_uploading || _selectedFile is null">
+            @(_uploading ? "Uploading..." : "Upload")
+        </MudButton>
+        <MudButton Variant="Variant.Text"
+                   OnClick="@(() => Nav.NavigateTo($"/app/shipments/{ShipmentId}"))">
+            Cancel
+        </MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    [Parameter] public Guid ShipmentId { get; set; }
+    private bool _uploading;
+    private IBrowserFile? _selectedFile;
+    private EvidenceDocumentType _docType = EvidenceDocumentType.CommercialInvoice;
+
+    private void FileSelected(InputFileChangeEventArgs e) => _selectedFile = e.File;
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null) return;
+        _uploading = true;
+        try
+        {
+            await using var stream = _selectedFile.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            var cmd = new UploadEvidenceCommand(
+                ShipmentId,
+                _selectedFile.Name,
+                _selectedFile.ContentType,
+                stream,
+                _docType);
+            await Mediator.Send(cmd);
+            Snackbar.Add("Evidence uploaded successfully", Severity.Success);
+            Nav.NavigateTo($"/app/shipments/{ShipmentId}");
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _uploading = false; }
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes switch
+        {
+            < 1024 => $"{bytes} B",
+            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+            _ => $"{bytes / 1024.0 / 1024.0:F1} MB"
+        };
+}

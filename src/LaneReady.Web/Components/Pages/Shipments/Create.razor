@@ -1,0 +1,116 @@
+@page "/app/shipments/create"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Shipments.Commands
+@using LaneReady.Application.Features.Products.Queries
+@using LaneReady.Domain.Enums
+@inject IMediator Mediator
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>New Shipment — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Create Shipment</MudText>
+
+<MudGrid>
+    <MudItem xs="12" md="6">
+        <MudCard Elevation="2">
+            <MudCardContent>
+                <MudDatePicker @bind-Date="_shipmentDate" Label="Shipment Date" Required="true" />
+                <MudSelect T="ConsigneeType" @bind-Value="_consigneeType" Label="Consignee Type" Class="mt-4">
+                    <MudSelectItem Value="ConsigneeType.B2B">B2B (business customer in NI)</MudSelectItem>
+                    <MudSelectItem Value="ConsigneeType.B2C">B2C (consumer in NI)</MudSelectItem>
+                </MudSelect>
+                <MudTextField @bind-Value="_carrierName" Label="Carrier Name (optional)" Class="mt-4" />
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderContent><MudText Typo="Typo.h6">Shipment Lines</MudText></CardHeaderContent>
+                <CardHeaderActions>
+                    <MudButton OnClick="AddLine" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small">
+                        Add Product
+                    </MudButton>
+                </CardHeaderActions>
+            </MudCardHeader>
+            <MudCardContent>
+                @foreach (var (line, idx) in _lines.Select((l, i) => (l, i)))
+                {
+                    <MudStack Row="true" Spacing="2" Class="mb-2" AlignItems="AlignItems.Center">
+                        <MudSelect T="Guid" @bind-Value="line.ProductId" Label="Product"
+                                   Style="flex:1">
+                            @foreach (var p in _products)
+                            {
+                                <MudSelectItem Value="@p.Id">@p.Sku — @p.Title</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudNumericField T="int" @bind-Value="line.Quantity" Label="Qty"
+                                         Min="1" Style="width:80px" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error"
+                                       Size="Size.Small" OnClick="@(() => RemoveLine(idx))" />
+                    </MudStack>
+                }
+                @if (!_lines.Any())
+                {
+                    <MudText Color="Color.Secondary">No lines added yet.</MudText>
+                }
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+<MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4" Spacing="2">
+    <MudButton Href="/app/shipments" Variant="Variant.Outlined">Cancel</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               OnClick="SubmitAsync" Disabled="_submitting || !_lines.Any() || !_shipmentDate.HasValue">
+        @(_submitting ? "Creating..." : "Create Shipment")
+    </MudButton>
+</MudStack>
+
+@code {
+    private bool _submitting;
+    private DateTime? _shipmentDate = DateTime.Today;
+    private ConsigneeType _consigneeType = ConsigneeType.B2B;
+    private string? _carrierName;
+    private readonly List<LineModel> _lines = [];
+    private List<ProductSummaryDto> _products = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Mediator.Send(new GetProductsQuery(ProductStatus.Complete, PageSize: 500));
+        _products = result.Items;
+    }
+
+    private void AddLine() => _lines.Add(new LineModel());
+    private void RemoveLine(int idx) => _lines.RemoveAt(idx);
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        try
+        {
+            var lines = _lines.Select(l => new ShipmentLineInput(l.ProductId, l.Quantity)).ToList();
+            var cmd = new CreateShipmentCommand(
+                DateOnly.FromDateTime(_shipmentDate!.Value),
+                _consigneeType, lines, _carrierName);
+
+            var result = await Mediator.Send(cmd);
+            Snackbar.Add($"Shipment created — {result.LaneDecision} lane", Severity.Success);
+            Nav.NavigateTo($"/app/shipments/{result.ShipmentId}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+        finally { _submitting = false; }
+    }
+
+    private sealed class LineModel
+    {
+        public Guid ProductId { get; set; }
+        public int Quantity { get; set; } = 1;
+    }
+}

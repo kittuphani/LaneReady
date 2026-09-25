@@ -1,0 +1,125 @@
+{
+  "version": "2025-01",
+  "eligibilityQuestions": [
+    {
+      "id": "q1",
+      "text": "Is your business established in Great Britain (England, Scotland, or Wales)?",
+      "type": "boolean",
+      "branch": {
+        "true": "q2",
+        "false": "result:not-gb-established"
+      }
+    },
+    {
+      "id": "q2",
+      "text": "Are you moving goods from GB to Northern Ireland (not GB to Republic of Ireland)?",
+      "type": "boolean",
+      "branch": {
+        "true": "q3",
+        "false": "result:wrong-route"
+      }
+    },
+    {
+      "id": "q3",
+      "text": "Are the goods \"at risk\" of being moved from Northern Ireland into the EU?",
+      "type": "boolean",
+      "branch": {
+        "true": "result:at-risk",
+        "false": "q4"
+      }
+    },
+    {
+      "id": "q4",
+      "text": "Are the goods intended for final sale to end consumers in Northern Ireland (B2C)?",
+      "type": "boolean",
+      "branch": {
+        "true": "result:b2c-eligible",
+        "false": "result:b2b-eligible"
+      }
+    }
+  ],
+  "eligibilityResults": {
+    "not-gb-established": {
+      "eligible": false,
+      "message": "UKIMS is only available to businesses established in Great Britain. Republic of Ireland or EU-based traders are not eligible."
+    },
+    "wrong-route": {
+      "eligible": false,
+      "message": "The Windsor Framework green lane applies only to GB→NI movements. Goods moving GB→Ireland or NI→GB use different arrangements."
+    },
+    "at-risk": {
+      "eligible": false,
+      "message": "Goods at risk of onward movement into the EU must use the red lane and full customs procedures."
+    },
+    "b2c-eligible": {
+      "eligible": true,
+      "message": "Your goods qualify for the Windsor Framework green lane (B2C). You can move them under the Internal Market Scheme without full customs declarations.",
+      "requiresUkims": true,
+      "consigneeType": "B2C"
+    },
+    "b2b-eligible": {
+      "eligible": true,
+      "message": "Your goods qualify for the Windsor Framework green lane (B2B). With a valid UKIMS authorisation you can move them on the green lane.",
+      "requiresUkims": true,
+      "consigneeType": "B2B"
+    }
+  },
+  "laneDecisionRules": [
+    {
+      "id": "green-lane-b2b-ukims",
+      "priority": 100,
+      "conditions": [
+        { "field": "organisation.hasUkims", "op": "eq", "value": true },
+        { "field": "organisation.ukimsExpired", "op": "eq", "value": false },
+        { "field": "shipment.consigneeType", "op": "eq", "value": "B2B" },
+        { "field": "shipment.allLinesHaveCommodityCode", "op": "eq", "value": true }
+      ],
+      "logic": "AND",
+      "decision": "Green",
+      "reason": "Valid UKIMS + B2B consignee + all commodity codes present"
+    },
+    {
+      "id": "green-lane-b2c-ukims",
+      "priority": 90,
+      "conditions": [
+        { "field": "organisation.hasUkims", "op": "eq", "value": true },
+        { "field": "organisation.ukimsExpired", "op": "eq", "value": false },
+        { "field": "shipment.consigneeType", "op": "eq", "value": "B2C" },
+        { "field": "shipment.totalValueGbp", "op": "lte", "value": 135 }
+      ],
+      "logic": "AND",
+      "decision": "Green",
+      "reason": "Valid UKIMS + B2C under £135 de minimis"
+    },
+    {
+      "id": "orange-missing-codes",
+      "priority": 50,
+      "conditions": [
+        { "field": "organisation.hasUkims", "op": "eq", "value": true },
+        { "field": "shipment.allLinesHaveCommodityCode", "op": "eq", "value": false }
+      ],
+      "logic": "AND",
+      "decision": "Orange",
+      "reason": "UKIMS present but one or more commodity codes missing — manual review required"
+    },
+    {
+      "id": "orange-ukims-expiring",
+      "priority": 45,
+      "conditions": [
+        { "field": "organisation.hasUkims", "op": "eq", "value": true },
+        { "field": "organisation.ukimsExpired", "op": "eq", "value": true }
+      ],
+      "logic": "AND",
+      "decision": "Orange",
+      "reason": "UKIMS has expired — renew before shipment can proceed on the green lane"
+    },
+    {
+      "id": "red-lane-default",
+      "priority": 1,
+      "conditions": [],
+      "logic": "DEFAULT",
+      "decision": "Red",
+      "reason": "No UKIMS authorisation — full customs procedures apply (red lane)"
+    }
+  ]
+}

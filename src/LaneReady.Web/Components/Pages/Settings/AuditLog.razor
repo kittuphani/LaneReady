@@ -1,0 +1,63 @@
+@page "/app/settings/audit"
+@attribute [Authorize(Policy = "RequireOwner")]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using LaneReady.Application.Common.Interfaces
+@using DomainAuditLog = LaneReady.Domain.Entities.AuditLog
+@using Microsoft.EntityFrameworkCore
+@inject IApplicationDbContext Db
+
+<PageTitle>Audit Log — LaneReady</PageTitle>
+<MudText Typo="Typo.h4" GutterBottom="true">Audit Log</MudText>
+<MudText Color="Color.Secondary" Class="mb-4">
+    Compliance-critical actions are recorded here and cannot be deleted.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudTable Items="_logs" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm"
+              FixedHeader="true" Height="calc(100vh - 240px)">
+        <HeaderContent>
+            <MudTh>Timestamp</MudTh>
+            <MudTh>Action</MudTh>
+            <MudTh>Entity</MudTh>
+            <MudTh>Actor</MudTh>
+            <MudTh>IP</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Time">@context.Timestamp.ToString("dd MMM yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Action">
+                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.Action</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Entity">
+                <MudText Typo="Typo.body2">@context.EntityType</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.EntityId.ToString()[..8]</MudText>
+            </MudTd>
+            <MudTd DataLabel="Actor">
+                <MudText Typo="Typo.body2">@context.ActorEmail</MudText>
+            </MudTd>
+            <MudTd DataLabel="IP">@(context.IpAddress ?? "—")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private List<DomainAuditLog> _logs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _logs = await Db.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(a => a.Timestamp)
+                .Take(500)
+                .ToListAsync();
+        }
+        finally { _loading = false; }
+    }
+}

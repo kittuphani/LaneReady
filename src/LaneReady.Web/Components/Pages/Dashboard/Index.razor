@@ -1,0 +1,97 @@
+@page "/app/dashboard"
+@attribute [Authorize]
+@rendermode Microsoft.AspNetCore.Components.Web.RenderMode.InteractiveServer
+@using MediatR
+@using LaneReady.Application.Features.Dashboard.Queries
+@inject IMediator Mediator
+
+<PageTitle>Dashboard — LaneReady</PageTitle>
+
+<MudText Typo="Typo.h4" GutterBottom="true">Compliance Dashboard</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_summary is not null)
+{
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent Class="text-center">
+                    <MudText Typo="Typo.h3" Color="@ReadinessColor">@_summary.ReadinessScore%</MudText>
+                    <MudText Typo="Typo.subtitle1">Compliance Readiness</MudText>
+                    <MudProgressLinear Value="@_summary.ReadinessScore" Color="@ReadinessColor"
+                                       Rounded="true" Class="mt-2" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent Class="text-center">
+                    <MudText Typo="Typo.h3">@_summary.ShipmentsThisMonth</MudText>
+                    <MudText Typo="Typo.subtitle1">Shipments This Month</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="2">
+                <MudCardContent Class="text-center">
+                    <MudText Typo="Typo.h3" Color="@((_summary.MissingDataProducts + _summary.NeedsReviewProducts) > 0 ? Color.Warning : Color.Success)">
+                        @(_summary.MissingDataProducts + _summary.NeedsReviewProducts)
+                    </MudText>
+                    <MudText Typo="Typo.subtitle1">Products Needing Review</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @if (_summary.OpenTasks.Count > 0)
+        {
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Open Tasks</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudList T="DashboardTask" Dense="true">
+                            @foreach (var task in _summary.OpenTasks)
+                            {
+                                <MudListItem T="DashboardTask" Icon="@Icons.Material.Filled.Warning" IconColor="Color.Warning">
+                                    @task.Title
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private DashboardSummaryDto? _summary;
+
+    private Color ReadinessColor => _summary?.ReadinessScore switch
+    {
+        >= 80 => Color.Success,
+        >= 50 => Color.Warning,
+        _ => Color.Error
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await Mediator.Send(new GetDashboardSummaryQuery());
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
