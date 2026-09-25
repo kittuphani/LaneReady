@@ -6,7 +6,7 @@
     <!-- CQRS + Validation -->
     <PackageVersion Include="MediatR"                                              Version="12.5.0" />
     <PackageVersion Include="FluentValidation"                                     Version="11.11.0" />
-    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions"       Version="11.11.0" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions"       Version="12.1.1" />
 
     <!-- EF Core -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore"                        Version="9.0.7" />
